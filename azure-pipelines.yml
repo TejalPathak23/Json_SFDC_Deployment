@@ -20,7 +20,7 @@ variables:
 
 stages:
   - stage: DeploySalesforce
-    displayName: "Deploy Salesforce Source"
+    displayName: "Deploy Salesforce Data"
     jobs:
       - job: SalesforceDeployment
         displayName: "Salesforce Authentication and Deployment"
@@ -49,16 +49,28 @@ stages:
               sfdx force:auth:device:login -r $(loginUrl) --setdefaultusername
             displayName: 'Salesforce Device Login'
 
-          # 4. Deploy to Sandbox with NoTestRun
+          # 4. Ensure we are inside the correct Salesforce project directory
+          - script: |
+              echo "Checking for Salesforce project..."
+              if [ ! -f "sfdx-project.json" ]; then
+                echo "Error: Not inside a Salesforce DX project! Exiting."
+                exit 1
+              fi
+              echo "Verified: Salesforce DX project found."
+            displayName: 'Verify Salesforce DX Project'
+
+          # 5. Deploy with NoTestRun for Sandbox
           - ${{ if ne(parameters.targetEnvironment, 'production') }}:
             - script: |
                 echo "Deploying to sandbox environment with NoTestRun..."
+                cd $(Build.SourcesDirectory)  # Ensure correct working directory
                 sfdx force:source:deploy -p force-app --testlevel NoTestRun
               displayName: 'Deploy Source (NoTestRun)'
 
-          # 5. Deploy to Production with RunAllTests
+          # 6. Deploy with RunAllTests for Production
           - ${{ if eq(parameters.targetEnvironment, 'production') }}:
             - script: |
                 echo "Deploying to production environment with RunAllTests..."
+                cd $(Build.SourcesDirectory)  # Ensure correct working directory
                 sfdx force:source:deploy -p force-app --testlevel RunAllTests
               displayName: 'Deploy Source (RunAllTests)'
