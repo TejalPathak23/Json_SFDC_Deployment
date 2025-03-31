@@ -11,11 +11,11 @@ parameters:
       - production
 
 variables:
-- name: loginUrl
-  ${{ if eq(parameters.targetEnvironment, 'production') }}:
-    value: 'https://login.salesforce.com'
-  ${{ else }}:
-    value: 'https://test.salesforce.com'
+  - name: loginUrl
+    ${{ if eq(parameters.targetEnvironment, 'production') }}:
+      value: 'https://login.salesforce.com'
+    ${{ else }}:
+      value: 'https://test.salesforce.com'
 
 stages:
   - stage: DeployJSONDataToSalesforce
@@ -42,20 +42,23 @@ stages:
             displayName: 'Salesforce Device Login'
 
           - script: |
+              echo "Installing Node.js dependencies..."
+              npm install json2csv
+            displayName: 'Install JSON to CSV Converter Dependencies'
+
+          - script: |
               echo "Converting JSON to Salesforce sObject format..."
               node convertJsonToCsv.js
             displayName: 'Convert JSON to CSV for Salesforce Upload'
 
-          # Production deployment step: Run tests during deployment
           - ${{ if eq(parameters.targetEnvironment, 'production') }}:
             - script: |
-                echo "Deploying JSON data (converted to CSV) to Salesforce with test execution..."
+                echo "Deploying data to Salesforce with test execution..."
                 sfdx force:data:bulk:upsert -s CustomObject__c -f output.csv -i Id --wait 10 --verbose
               displayName: 'Deploy Data to Salesforce (RunLocalTests)'
 
-          # Sandbox deployment step: Skip tests if not needed
           - ${{ if ne(parameters.targetEnvironment, 'production') }}:
             - script: |
-                echo "Deploying JSON data (converted to CSV) to Salesforce without running tests..."
+                echo "Deploying data to Salesforce without running tests..."
                 sfdx force:data:bulk:upsert -s CustomObject__c -f output.csv -i Id --wait 10 --verbose
               displayName: 'Deploy Data to Salesforce (NoTestRun)'
