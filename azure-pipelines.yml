@@ -11,7 +11,7 @@ parameters:
       - production
 
 variables:
-  name: loginUrl
+- name: loginUrl
   ${{ if eq(parameters.targetEnvironment, 'production') }}:
     value: 'https://login.salesforce.com'
   ${{ else }}:
