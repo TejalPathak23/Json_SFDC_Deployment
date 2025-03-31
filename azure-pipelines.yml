@@ -48,7 +48,7 @@ stages:
 
           - script: |
               echo "Converting JSON to Salesforce sObject format..."
-              node ./scripts/convertJsonToCsv.js
+              node convertJsonToCsv.js
             displayName: 'Convert JSON to CSV for Salesforce Upload'
 
           - ${{ if eq(parameters.targetEnvironment, 'production') }}:
