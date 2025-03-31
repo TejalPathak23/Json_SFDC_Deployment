@@ -20,10 +20,10 @@ variables:
 
 stages:
   - stage: DeploySalesforce
-    displayName: "Deploy Salesforce with Conditional Test Options"
+    displayName: "Deploy Salesforce Data"
     jobs:
       - job: SalesforceDeployment
-        displayName: "Salesforce CLI Installation, Auth, and Deployment"
+        displayName: "Salesforce Authentication and Deployment"
         pool:
           vmImage: 'ubuntu-latest'
         steps:
@@ -41,7 +41,7 @@ stages:
               npm install --global sfdx-cli
             displayName: 'Install Salesforce CLI'
 
-          # 3. Authenticate to Salesforce using device login (FIXED VARIABLE EXPANSION)
+          # 3. Authenticate to Salesforce using device login
           - script: |
               echo "Checking Salesforce CLI version..."
               sfdx --version
@@ -49,17 +49,28 @@ stages:
               sfdx force:auth:device:login -r $(loginUrl) --setdefaultusername
             displayName: 'Salesforce Device Login'
 
-          # 4. Conditional deployments:
-          #    - Production => RunAllTests
-          #    - Sandbox => NoTestRun
-          - ${{ if eq(parameters.targetEnvironment, 'production') }}:
-            - script: |
-                echo "Deploying to production environment with RunAllTests..."
-                sfdx force:source:deploy -p force-app --testlevel RunAllTests
-              displayName: 'Deploy Source (RunAllTests)'
+          # 4. Ensure we are inside the correct Salesforce project directory
+          - script: |
+              echo "Checking for Salesforce project..."
+              if [ ! -f "sfdx-project.json" ]; then
+                echo "Error: Not inside a Salesforce DX project! Exiting."
+                exit 1
+              fi
+              echo "Verified: Salesforce DX project found."
+            displayName: 'Verify Salesforce DX Project'
 
+          # 5. Deploy with NoTestRun for Sandbox
           - ${{ if ne(parameters.targetEnvironment, 'production') }}:
             - script: |
                 echo "Deploying to sandbox environment with NoTestRun..."
+                cd $(Build.SourcesDirectory)  # Ensure correct working directory
                 sfdx force:source:deploy -p force-app --testlevel NoTestRun
               displayName: 'Deploy Source (NoTestRun)'
+
+          # 6. Deploy with RunAllTests for Production
+          - ${{ if eq(parameters.targetEnvironment, 'production') }}:
+            - script: |
+                echo "Deploying to production environment with RunAllTests..."
+                cd $(Build.SourcesDirectory)  # Ensure correct working directory
+                sfdx force:source:deploy -p force-app --testlevel RunAllTests
+              displayName: 'Deploy Source (RunAllTests)'
