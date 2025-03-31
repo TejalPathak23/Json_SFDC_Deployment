@@ -1,4 +1,5 @@
 # azure-pipelines.yml
+
 trigger:
   - main
 
@@ -12,65 +13,62 @@ parameters:
       - production
 
 variables:
-  - name: loginUrl
-    ${{ if eq(parameters.targetEnvironment, 'production') }}:
-      value: 'https://login.salesforce.com'
-    ${{ else }}:
-      value: 'https://test.salesforce.com'
+  name: loginUrl
+  ${{ if eq(parameters.targetEnvironment, 'production') }}:
+    value: 'https://login.salesforce.com'
+  ${{ else }}:
+    value: 'https://test.salesforce.com'
 
 stages:
-  - stage: DeploySalesforce
-    displayName: "Deploy Salesforce Data"
+  - stage: DeployFromJSON
+    displayName: "Deploy JSON Data to Salesforce"
     jobs:
-      - job: SalesforceDeployment
-        displayName: "Salesforce Authentication and Deployment"
+      - job: SalesforceJSONDeployment
+        displayName: "Salesforce JSON Conversion & Deployment"
         pool:
           vmImage: 'ubuntu-latest'
         steps:
-          # 1. Install Node.js so that npm is available
           - task: NodeTool@0
             inputs:
               versionSpec: '16.x'
             displayName: 'Install Node.js'
 
-          # 2. Install the Salesforce CLI using npm
           - script: |
-              echo "Verifying npm version..."
-              npm --version
-              echo "Installing Salesforce CLI globally..."
-              npm install --global sfdx-cli
+              echo "Installing Salesforce CLI..."
+              npm install sfdx-cli --global
             displayName: 'Install Salesforce CLI'
 
-          # 3. Authenticate to Salesforce using device login
           - script: |
-              echo "Checking Salesforce CLI version..."
-              sfdx --version
-              echo "Authenticating to Salesforce on URL: $(loginUrl)"
+              echo "Authenticating to Salesforce using device login on URL: $(loginUrl)"
               sfdx force:auth:device:login -r $(loginUrl) --setdefaultusername
             displayName: 'Salesforce Device Login'
 
-          # 4. Ensure we are inside the correct Salesforce project directory
           - script: |
-              echo "Checking for Salesforce project..."
-              if [ ! -f "sfdx-project.json" ]; then
-                echo "Error: Not inside a Salesforce DX project! Exiting."
-                exit 1
-              fi
-              echo "Verified: Salesforce DX project found."
-            displayName: 'Verify Salesforce DX Project'
+              echo "Extracting JSON data..."
+              mkdir -p metadata
+              cp data/*.json metadata/
+            displayName: 'Extract JSON Data'
 
-          # 5. Deploy with NoTestRun for Sandbox
-          - ${{ if ne(parameters.targetEnvironment, 'production') }}:
-            - script: |
-                echo "Deploying to sandbox environment with NoTestRun..."
-                cd $(Build.SourcesDirectory)  # Ensure correct working directory
-                sfdx force:source:deploy -p force-app --testlevel NoTestRun
-              displayName: 'Deploy Source (NoTestRun)'
+          - script: |
+              echo "Converting JSON to Salesforce Metadata API format..."
+              node scripts/jsonToMetadata.js
+            displayName: 'Convert JSON to Metadata'
 
-          # 6. Deploy with RunAllTests for Production
+          - script: |
+              echo "Deploying converted metadata to Salesforce..."
+              sfdx force:mdapi:deploy -d metadata --wait 10
+            displayName: 'Deploy Metadata to Salesforce'
+
+          # Production deployment: Run tests
           - ${{ if eq(parameters.targetEnvironment, 'production') }}:
             - script: |
-                echo "Deploying to production environment with RunAllTests..."
-                cd $(Build.SourcesDirectory)  # Ensure correct working directory
-                sfdx force:source:deploy -p force-app --testlevel RunAllTests
-              displayName: 'Deploy Source (RunAllTests)'
+                echo "Running tests before deploying to Production..."
+                sfdx force:mdapi:deploy -d metadata --wait 10 --testlevel RunLocalTests
+              displayName: 'Deploy Metadata with Tests'
+
+          # Sandbox deployment: Skip tests
+          - ${{ if ne(parameters.targetEnvironment, 'production') }}:
+            - script: |
+                echo "Skipping tests for Sandbox deployment..."
+                sfdx force:mdapi:deploy -d metadata --wait 10 --testlevel NoTestRun
+              displayName: 'Deploy Metadata without Tests'
