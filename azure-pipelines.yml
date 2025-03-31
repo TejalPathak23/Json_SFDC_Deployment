@@ -12,12 +12,11 @@ parameters:
       - production
 
 variables:
-  # Set loginUrl based on environment
-  name: loginUrl
-  ${{ if eq(parameters.targetEnvironment, 'production') }}:
-    value: 'https://login.salesforce.com'
-  ${{ else }}:
-    value: 'https://test.salesforce.com'
+  - name: loginUrl
+    ${{ if eq(parameters.targetEnvironment, 'production') }}:
+      value: 'https://login.salesforce.com'
+    ${{ else }}:
+      value: 'https://test.salesforce.com'
 
 stages:
   - stage: DeploySalesforce
@@ -42,7 +41,7 @@ stages:
               npm install --global sfdx-cli
             displayName: 'Install Salesforce CLI'
 
-          # 3. Authenticate to Salesforce using device login
+          # 3. Authenticate to Salesforce using device login (FIXED VARIABLE EXPANSION)
           - script: |
               echo "Checking Salesforce CLI version..."
               sfdx --version
@@ -50,18 +49,15 @@ stages:
               sfdx force:auth:device:login -r $(loginUrl) --setdefaultusername
             displayName: 'Salesforce Device Login'
 
-          # 4. Conditional deployment steps:
-          #    Production => RunAllTests
-          #    Sandbox => NoTestRun
-          
-          # Production environment
+          # 4. Conditional deployments:
+          #    - Production => RunAllTests
+          #    - Sandbox => NoTestRun
           - ${{ if eq(parameters.targetEnvironment, 'production') }}:
             - script: |
                 echo "Deploying to production environment with RunAllTests..."
                 sfdx force:source:deploy -p force-app --testlevel RunAllTests
               displayName: 'Deploy Source (RunAllTests)'
 
-          # Non-production environment
           - ${{ if ne(parameters.targetEnvironment, 'production') }}:
             - script: |
                 echo "Deploying to sandbox environment with NoTestRun..."
