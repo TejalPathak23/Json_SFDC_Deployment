@@ -1,0 +1,18 @@
+[
+  {
+    "attributes": {
+      "type": "Account",
+      "referenceId": "AccountRef1"
+    },
+    "Name": "Json Testing"
+  },
+  {
+    "attributes": {
+      "type": "Contact",
+      "referenceId": "ContactRef1"
+    },
+    "FirstName": "Testing",
+    "LastName": "Json",
+    "AccountId": "@AccountRef1"
+  }
+]
