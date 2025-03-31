@@ -1,5 +1,3 @@
-# azure-pipelines.yml
-
 trigger:
   - main
 
@@ -20,11 +18,11 @@ variables:
     value: 'https://test.salesforce.com'
 
 stages:
-  - stage: DeployFromJSON
+  - stage: DeployJSONDataToSalesforce
     displayName: "Deploy JSON Data to Salesforce"
     jobs:
-      - job: SalesforceJSONDeployment
-        displayName: "Salesforce JSON Conversion & Deployment"
+      - job: SalesforceDeployment
+        displayName: "Salesforce Authentication and JSON Deployment"
         pool:
           vmImage: 'ubuntu-latest'
         steps:
@@ -44,31 +42,20 @@ stages:
             displayName: 'Salesforce Device Login'
 
           - script: |
-              echo "Extracting JSON data..."
-              mkdir -p metadata
-              cp data/*.json metadata/
-            displayName: 'Extract JSON Data'
+              echo "Converting JSON to Salesforce sObject format..."
+              node convertJsonToCsv.js
+            displayName: 'Convert JSON to CSV for Salesforce Upload'
 
-          - script: |
-              echo "Converting JSON to Salesforce Metadata API format..."
-              node scripts/jsonToMetadata.js
-            displayName: 'Convert JSON to Metadata'
-
-          - script: |
-              echo "Deploying converted metadata to Salesforce..."
-              sfdx force:mdapi:deploy -d metadata --wait 10
-            displayName: 'Deploy Metadata to Salesforce'
-
-          # Production deployment: Run tests
+          # Production deployment step: Run tests during deployment
           - ${{ if eq(parameters.targetEnvironment, 'production') }}:
             - script: |
-                echo "Running tests before deploying to Production..."
-                sfdx force:mdapi:deploy -d metadata --wait 10 --testlevel RunLocalTests
-              displayName: 'Deploy Metadata with Tests'
+                echo "Deploying JSON data (converted to CSV) to Salesforce with test execution..."
+                sfdx force:data:bulk:upsert -s CustomObject__c -f output.csv -i Id --wait 10 --verbose
+              displayName: 'Deploy Data to Salesforce (RunLocalTests)'
 
-          # Sandbox deployment: Skip tests
+          # Sandbox deployment step: Skip tests if not needed
           - ${{ if ne(parameters.targetEnvironment, 'production') }}:
             - script: |
-                echo "Skipping tests for Sandbox deployment..."
-                sfdx force:mdapi:deploy -d metadata --wait 10 --testlevel NoTestRun
-              displayName: 'Deploy Metadata without Tests'
+                echo "Deploying JSON data (converted to CSV) to Salesforce without running tests..."
+                sfdx force:data:bulk:upsert -s CustomObject__c -f output.csv -i Id --wait 10 --verbose
+              displayName: 'Deploy Data to Salesforce (NoTestRun)'
